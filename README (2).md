@@ -5,7 +5,7 @@
 
 **Технологии:** HTML, CSS, JavaScript (без библиотек и сборки).
 
-**Демо:** _вставьте сюда ссылку на GitHub Pages_
+**Демо:** https://toshi207.github.io/focus-timer/
 
 ## Запуск локально
 Откройте `index.html` в браузере.
