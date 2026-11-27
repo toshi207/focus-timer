@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Фокус — таймер и задачи</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Onest:wght@400;600&family=Unbounded:wght@600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#e9f1ee;--ink:#0f3d3e;--card:#fff;--accent:#ffd23f;--mute:#5b7a78;--line:#cfdedb}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg);color:var(--ink);font:16px/1.5 Onest,system-ui,sans-serif;display:grid;place-items:center;padding:20px}
+main{width:100%;max-width:440px}
+h1{font:600 1.1rem Unbounded,sans-serif;margin:0 0 16px}
+.timer{background:var(--ink);color:#fff;border-radius:24px;padding:28px;text-align:center}
+.modes{display:flex;gap:8px;justify-content:center;margin-bottom:12px}
+.modes button{background:transparent;color:#bcd3d0;border:1px solid #3b6667;border-radius:99px;padding:6px 14px;font:inherit;cursor:pointer}
+.modes button.on{background:var(--accent);color:var(--ink);border-color:var(--accent)}
+#time{font:600 4.2rem Unbounded,sans-serif;letter-spacing:-.02em;margin:8px 0}
+.ctl button{font:600 1rem Onest,sans-serif;border:0;border-radius:99px;padding:12px 28px;margin:0 4px;cursor:pointer;background:var(--accent);color:var(--ink)}
+.ctl .ghost{background:transparent;color:#fff;border:1px solid #3b6667}
+.bar{height:6px;background:#27575a;border-radius:9px;margin-top:20px;overflow:hidden}
+#fill{height:100%;width:0;background:var(--accent);transition:width 1s linear}
+.stats{color:#bcd3d0;font-size:.9rem;margin-top:12px}
+section{margin-top:24px}
+form{display:flex;gap:8px}
+input{flex:1;padding:12px 14px;border:1px solid var(--line);border-radius:12px;font:inherit;background:var(--card);color:var(--ink)}
+form button{border:0;border-radius:12px;background:var(--ink);color:#fff;padding:0 18px;font:inherit;cursor:pointer}
+ul{list-style:none;padding:0;margin:12px 0 0}
+li{display:flex;align-items:center;gap:10px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin-bottom:8px}
+li span{flex:1}
+li.done span{text-decoration:line-through;color:var(--mute)}
+li input[type=checkbox]{flex:none;width:20px;height:20px;accent-color:var(--ink)}
+li button{border:0;background:none;color:var(--mute);font-size:1.2rem;cursor:pointer}
+.empty{color:var(--mute);text-align:center;padding:12px}
+:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Фокус</h1>
+  <div class="timer">
+    <div class="modes" role="group" aria-label="Режим">
+      <button data-min="25" class="on">Работа 25</button>
+      <button data-min="5">Перерыв 5</button>
+      <button data-min="15">Отдых 15</button>
+    </div>
+    <div id="time" aria-live="off">25:00</div>
+    <div class="ctl">
+      <button id="start">Старт</button>
+      <button id="reset" class="ghost">Сброс</button>
+    </div>
+    <div class="bar"><div id="fill"></div></div>
+    <div class="stats">Сегодня завершено сессий: <b id="count">0</b></div>
+  </div>
+
+  <section>
+    <form id="form">
+      <input id="task" placeholder="Над чем работаем?" aria-label="Новая задача" required>
+      <button>Добавить</button>
+    </form>
+    <ul id="list"></ul>
+  </section>
+</main>
+
+<script>
+const $ = id => document.getElementById(id);
+const today = new Date().toDateString();
+const load = (k, d) => { try { return JSON.parse(localStorage.getItem(k)) ?? d; } catch { return d; } };
+const save = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} };
+
+/* ---------- Таймер ---------- */
+let total = 25 * 60, left = total, timer = null;
+const fmt = s => String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
+
+function draw() {
+  $('time').textContent = fmt(left);
+  $('fill').style.width = (100 * (total - left) / total) + '%';
+  document.title = (timer ? fmt(left) + ' · ' : '') + 'Фокус';
+}
+function stop() { clearInterval(timer); timer = null; $('start').textContent = 'Старт'; }
+function tick() {
+  left--;
+  if (left <= 0) {
+    left = 0; stop();
+    if (total === 25 * 60) {
+      const s = load('sessions', {}); s[today] = (s[today] || 0) + 1; save('sessions', s); showCount();
+    }
+    try { new (window.AudioContext || window.webkitAudioContext)().resume(); } catch {}
+    alert('Время вышло!');
+  }
+  draw();
+}
+$('start').onclick = () => {
+  if (timer) return stop();
+  if (left === 0) left = total;
+  timer = setInterval(tick, 1000);
+  $('start').textContent = 'Пауза';
+};
+$('reset').onclick = () => { stop(); left = total; draw(); };
+document.querySelectorAll('.modes button').forEach(b => b.onclick = () => {
+  document.querySelector('.modes .on').classList.remove('on');
+  b.classList.add('on');
+  stop(); total = left = +b.dataset.min * 60; draw();
+});
+function showCount() { $('count').textContent = load('sessions', {})[today] || 0; }
+
+/* ---------- Задачи ---------- */
+let tasks = load('tasks', []);
+function render() {
+  const ul = $('list'); ul.innerHTML = '';
+  if (!tasks.length) { ul.innerHTML = '<div class="empty">Пока пусто. Добавьте первую задачу.</div>'; return; }
+  tasks.forEach((t, i) => {
+    const li = document.createElement('li');
+    if (t.done) li.className = 'done';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox'; cb.checked = t.done; cb.setAttribute('aria-label', 'Выполнено');
+    cb.onchange = () => { t.done = cb.checked; save('tasks', tasks); render(); };
+    const sp = document.createElement('span'); sp.textContent = t.text;
+    const del = document.createElement('button');
+    del.textContent = '×'; del.setAttribute('aria-label', 'Удалить задачу');
+    del.onclick = () => { tasks.splice(i, 1); save('tasks', tasks); render(); };
+    li.append(cb, sp, del); ul.append(li);
+  });
+}
+$('form').onsubmit = e => {
+  e.preventDefault();
+  const text = $('task').value.trim();
+  if (!text) return;
+  tasks.unshift({ text, done: false }); save('tasks', tasks);
+  $('task').value = ''; render();
+};
+
+draw(); showCount(); render();
+</script>
+</body>
+</html>
